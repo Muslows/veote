@@ -3,7 +3,7 @@
 Plateforme **civic-tech neutre** pour la présidentielle française 2027.
 
 Stack : **Next.js App Router** · TypeScript · Tailwind · Prisma · **PostgreSQL**  
-Déploiement cible : **o2switch** (Phusion Passenger, `output: "standalone"`).
+Déploiement cible : **o2switch** (Phusion Passenger, `server.js` classique + `.next`).
 
 | Module | Route | Contenu |
 |--------|-------|---------|
@@ -45,7 +45,7 @@ npm run dev
 
 | Script | Rôle |
 |--------|------|
-| `npm run build` | `next build` + copie des assets standalone |
+| `npm run build` | `next build` (classique, pas de standalone) |
 | `npm start` | Entrée Passenger (`server.js`) |
 | `npm run db:seed` | Seed sourcé Modules A + B + C |
 | `npm run sync:an` | Sync Open Data Assemblée nationale |

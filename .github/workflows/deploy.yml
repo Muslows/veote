@@ -46,19 +46,18 @@ jobs:
       - name: Prisma generate
         run: npx prisma generate
 
-      - name: Build (standalone + copy-standalone-assets)
+      - name: Build (classic Next — no standalone)
         run: npm run build
 
       - name: Verify App Router routes in build output
         run: |
           set -euo pipefail
           test -f .next/BUILD_ID
-          test -f .next/standalone/server.js
-          test -d .next/standalone/.next/static
+          test -d .next/server
+          test -d .next/static
           # Routes publiques attendues (chemins français)
           for route in candidats lois sondages methodologie; do
             if [ ! -e ".next/server/app/${route}" ] && [ ! -e ".next/server/app/${route}.html" ] && [ ! -e ".next/server/app/${route}.meta" ]; then
-              # App Router émet souvent un dossier ou des fichiers .rsc / page.js
               found="$(find .next/server/app -maxdepth 3 -type d -name "${route}" | head -1 || true)"
               if [ -z "$found" ]; then
                 echo "Missing built route: /${route}" >&2
@@ -68,10 +67,6 @@ jobs:
             fi
             echo "OK built route /${route}"
           done
-          # Redirects legacy /a /b /c présents dans le manifest Next
-          if ! grep -Rqs '"/candidats"' .next || ! grep -Rqs 'candidats' .next/routes-manifest.json; then
-            echo "WARN: could not confirm /candidats in routes-manifest (continuing)" >&2
-          fi
           cat .next/routes-manifest.json | head -c 4000 || true
           echo
 
@@ -105,8 +100,8 @@ jobs:
           #
           # Layout attendu côté o2switch (Application root ≠ document root domaine) :
           #   server.js          ← PassengerStartupFile (listen "passenger")
-          #   .next/             ← build complet + standalone/ (assets copiés)
-          #   public/            ← aussi recopié dans .next/standalone/public/
+          #   .next/             ← build classique (hors cache)
+          #   public/ prisma/ scripts/
           #   package.json       ← npm ci --omit=dev fournit `next` pour server.js
           #
           # Ne jamais pointer le document root Apache sur public/ seul :
@@ -115,6 +110,7 @@ jobs:
             --exclude '.env' \
             --exclude 'node_modules' \
             --exclude '.git' \
+            --exclude 'cache' \
             -e "$RSH" \
             .next/ "${DEST}/.next/"
 
@@ -147,14 +143,12 @@ jobs:
             server.js package.json package-lock.json next.config.* \
             "${DEST}/"
 
-          # Garde-fou : le startup Passenger + BUILD_ID doivent être présents localement
-          # avant restart (rsync ci-dessus les a poussés).
           test -f server.js
           test -f .next/BUILD_ID
-          test -f .next/standalone/server.js
-          test -d .next/standalone/.next/static
+          test -d .next/server
+          test -d .next/static
 
-      - name: Install, migrate schema, restart Passenger
+      - name: Install, prisma generate, migrate schema, restart Passenger
         env:
           O2SWITCH_HOST: ${{ secrets.O2SWITCH_HOST }}
           O2SWITCH_USER: ${{ secrets.O2SWITCH_USER }}
@@ -168,5 +162,8 @@ jobs:
              source \"${O2SWITCH_NODE_VENV}\"
              cd \"${O2SWITCH_APP_DIR}\"
              npm ci --omit=dev
-             npx prisma db push
+             npx prisma generate
+             if [ -f prisma/schema.prisma ]; then
+               npx prisma db push
+             fi
              mkdir -p tmp && touch tmp/restart.txt"

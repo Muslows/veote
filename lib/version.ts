@@ -3,7 +3,7 @@
  * Règle : toute modification de code doit bumper APP_VERSION (v1.0.x) avant commit.
  */
 
-export const APP_VERSION = "v1.0.1";
+export const APP_VERSION = "v1.0.2";
 
 /**
  * Horodatage ISO injecté au build via `next.config` → `env.NEXT_PUBLIC_BUILD_TIME`.
