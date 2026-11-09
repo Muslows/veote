@@ -46,7 +46,7 @@ export default async function CandidatePage({ params }: PageProps) {
     <Container className="py-10 sm:py-14">
       <nav className="mb-6 text-sm text-veote-muted">
         <Link
-          href="/a"
+          href="/candidats"
           className="text-veote-muted no-underline hover:text-veote-focus hover:underline"
         >
           ← Candidats

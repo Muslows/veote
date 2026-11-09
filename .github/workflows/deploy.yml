@@ -49,6 +49,32 @@ jobs:
       - name: Build (standalone + copy-standalone-assets)
         run: npm run build
 
+      - name: Verify App Router routes in build output
+        run: |
+          set -euo pipefail
+          test -f .next/BUILD_ID
+          test -f .next/standalone/server.js
+          test -d .next/standalone/.next/static
+          # Routes publiques attendues (chemins français)
+          for route in candidats lois sondages methodologie; do
+            if [ ! -e ".next/server/app/${route}" ] && [ ! -e ".next/server/app/${route}.html" ] && [ ! -e ".next/server/app/${route}.meta" ]; then
+              # App Router émet souvent un dossier ou des fichiers .rsc / page.js
+              found="$(find .next/server/app -maxdepth 3 -type d -name "${route}" | head -1 || true)"
+              if [ -z "$found" ]; then
+                echo "Missing built route: /${route}" >&2
+                find .next/server/app -maxdepth 2 -print >&2
+                exit 1
+              fi
+            fi
+            echo "OK built route /${route}"
+          done
+          # Redirects legacy /a /b /c présents dans le manifest Next
+          if ! grep -Rqs '"/candidats"' .next || ! grep -Rqs 'candidats' .next/routes-manifest.json; then
+            echo "WARN: could not confirm /candidats in routes-manifest (continuing)" >&2
+          fi
+          cat .next/routes-manifest.json | head -c 4000 || true
+          echo
+
       - name: Start ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -76,6 +102,15 @@ jobs:
           # Sync build + runtime sources only. Always exclude secrets & deps.
           # --delete on content dirs so stale chunks/schema files disappear.
           # Do not --delete the app root (preserves server .env, logs, tmp, node_modules).
+          #
+          # Layout attendu côté o2switch (Application root ≠ document root domaine) :
+          #   server.js          ← PassengerStartupFile (listen "passenger")
+          #   .next/             ← build complet + standalone/ (assets copiés)
+          #   public/            ← aussi recopié dans .next/standalone/public/
+          #   package.json       ← npm ci --omit=dev fournit `next` pour server.js
+          #
+          # Ne jamais pointer le document root Apache sur public/ seul :
+          # Passenger doit proxyfier TOUTES les URLs vers Node (sinon seul / marche).
           rsync -avz --delete \
             --exclude '.env' \
             --exclude 'node_modules' \
@@ -111,6 +146,13 @@ jobs:
             -e "$RSH" \
             server.js package.json package-lock.json next.config.* \
             "${DEST}/"
+
+          # Garde-fou : le startup Passenger + BUILD_ID doivent être présents localement
+          # avant restart (rsync ci-dessus les a poussés).
+          test -f server.js
+          test -f .next/BUILD_ID
+          test -f .next/standalone/server.js
+          test -d .next/standalone/.next/static
 
       - name: Install, migrate schema, restart Passenger
         env:

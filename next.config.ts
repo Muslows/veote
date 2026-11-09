@@ -64,6 +64,17 @@ const nextConfig: NextConfig = {
   experimental: {
     cpus: 1,
   },
+  // Anciennes routes modules A/B/C → chemins français publics.
+  async redirects() {
+    return [
+      { source: "/a", destination: "/candidats", permanent: true },
+      { source: "/a/:path*", destination: "/candidats/:path*", permanent: true },
+      { source: "/b", destination: "/lois", permanent: true },
+      { source: "/b/:path*", destination: "/lois/:path*", permanent: true },
+      { source: "/c", destination: "/sondages", permanent: true },
+      { source: "/c/:path*", destination: "/sondages/:path*", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

@@ -215,7 +215,7 @@ export function SimulatorClient({
       matrix: next.matrix ?? matrixKey,
       reservoirs: next.reservoirs ?? reservoirs,
     });
-    router.replace(`/c/simulateur${q}`, { scroll: false });
+    router.replace(`/sondages/simulateur${q}`, { scroll: false });
   }
 
   const pollCandidates = shares.map((s) => ({

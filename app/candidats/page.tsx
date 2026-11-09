@@ -49,44 +49,51 @@ export default async function ModuleAIndexPage() {
         >
           Figures indexées
         </h2>
-        <ul className="divide-y divide-veote-border border-y border-veote-border">
-          {candidates.map((c) => {
-            const party = c.affiliations[0]?.party;
-            const src = c.sources[0]?.source;
-            return (
-              <li key={c.id} className="py-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-3">
-                  <div>
-                    <Link
-                      href={`/a/${encodeURIComponent(c.slug)}`}
-                      className="font-display text-lg font-semibold text-veote-text no-underline hover:text-veote-focus hover:underline"
-                    >
-                      {c.displayName}
-                    </Link>
-                    {party ? (
-                      <p className="mt-1 text-sm text-veote-muted">
-                        <Link
-                          href={`/a/partis/${encodeURIComponent(party.slug)}`}
-                          className="text-veote-muted no-underline hover:text-veote-focus hover:underline"
-                        >
-                          {party.acronym ?? party.name}
-                        </Link>
-                      </p>
+        {candidates.length === 0 ? (
+          <p className="rounded-md border border-dashed border-veote-border px-4 py-6 text-sm text-veote-muted">
+            Aucun candidat indexé pour le moment. Les fiches apparaîtront ici
+            après seed ou synchronisation des sources.
+          </p>
+        ) : (
+          <ul className="divide-y divide-veote-border border-y border-veote-border">
+            {candidates.map((c) => {
+              const party = c.affiliations[0]?.party;
+              const src = c.sources[0]?.source;
+              return (
+                <li key={c.id} className="py-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-3">
+                    <div>
+                      <Link
+                        href={`/candidats/${encodeURIComponent(c.slug)}`}
+                        className="font-display text-lg font-semibold text-veote-text no-underline hover:text-veote-focus hover:underline"
+                      >
+                        {c.displayName}
+                      </Link>
+                      {party ? (
+                        <p className="mt-1 text-sm text-veote-muted">
+                          <Link
+                            href={`/candidats/partis/${encodeURIComponent(party.slug)}`}
+                            className="text-veote-muted no-underline hover:text-veote-focus hover:underline"
+                          >
+                            {party.acronym ?? party.name}
+                          </Link>
+                        </p>
+                      ) : null}
+                    </div>
+                    {src ? (
+                      <SourceBadge
+                        label={src.label}
+                        href={src.url}
+                        organism={src.organism ?? undefined}
+                        className="shrink-0"
+                      />
                     ) : null}
                   </div>
-                  {src ? (
-                    <SourceBadge
-                      label={src.label}
-                      href={src.url}
-                      organism={src.organism ?? undefined}
-                      className="shrink-0"
-                    />
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className="mt-12 space-y-4" aria-labelledby="liste-partis">
@@ -100,7 +107,7 @@ export default async function ModuleAIndexPage() {
           {activeParties.map((p) => (
             <li key={p.id}>
               <Link
-                href={`/a/partis/${encodeURIComponent(p.slug)}`}
+                href={`/candidats/partis/${encodeURIComponent(p.slug)}`}
                 className="text-veote-accent no-underline hover:text-veote-focus hover:underline"
               >
                 {p.acronym ? `${p.acronym} — ${p.name}` : p.name}

@@ -87,7 +87,7 @@ export default async function EvolutionPage({ searchParams }: PageProps) {
     <Container className="py-10 sm:py-14">
       <nav className="mb-6 text-sm text-veote-muted">
         <Link
-          href="/c"
+          href="/sondages"
           className="text-veote-muted no-underline hover:text-veote-focus hover:underline"
         >
           ← Observatoire

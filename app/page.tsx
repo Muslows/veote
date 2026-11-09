@@ -4,17 +4,17 @@ import { Container } from "@/components/ui/Container";
 
 const MODULES = [
   {
-    href: "/a",
+    href: "/candidats",
     label: "Candidats",
     blurb: "Parcours, partis, généalogie politique et déclarations HATVP sourcées.",
   },
   {
-    href: "/b",
+    href: "/lois",
     label: "Lois",
     blurb: "Textes et scrutins de l’Assemblée nationale, avec décomptes officiels.",
   },
   {
-    href: "/c",
+    href: "/sondages",
     label: "Sondages",
     blurb: "Intentions publiées et simulateur de reports, toujours sourcés.",
   },

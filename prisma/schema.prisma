@@ -717,7 +717,7 @@ model VotePosition {
 model Poll {
   id String @id @default(cuid())
 
-  /// Slug Unicode pour URLs (/c/[slug]) — accents conservés
+  /// Slug Unicode pour URLs (/sondages/[slug]) — accents conservés
   slug     String  @unique
   slugNote String?
 

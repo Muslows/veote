@@ -45,7 +45,7 @@ export function AffiliationTimeline({ affiliations }: AffiliationTimelineProps) 
               <li key={a.id} className="veote-panel rounded-lg p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <Link
-                    href={`/a/partis/${encodeURIComponent(a.party.slug)}`}
+                    href={`/candidats/partis/${encodeURIComponent(a.party.slug)}`}
                     className="font-medium text-veote-text no-underline hover:text-veote-focus hover:underline"
                   >
                     {a.party.name}

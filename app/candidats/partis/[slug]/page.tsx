@@ -58,7 +58,7 @@ export default async function PartyPage({ params }: PageProps) {
     <Container className="py-10 sm:py-14">
       <nav className="mb-6 text-sm text-veote-muted">
         <Link
-          href="/a"
+          href="/candidats"
           className="text-veote-muted no-underline hover:text-veote-focus hover:underline"
         >
           ← Candidats &amp; partis
@@ -126,7 +126,7 @@ export default async function PartyPage({ params }: PageProps) {
             {party.affiliations.map((a) => (
               <li key={a.id}>
                 <Link
-                  href={`/a/${encodeURIComponent(a.candidate.slug)}`}
+                  href={`/candidats/${encodeURIComponent(a.candidate.slug)}`}
                   className="text-veote-accent no-underline hover:text-veote-focus hover:underline"
                 >
                   {a.candidate.displayName}
