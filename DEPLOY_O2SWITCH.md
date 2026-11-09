@@ -164,6 +164,10 @@ Prérequis système : binaire `unzip` (présent sur o2switch Linux) ; `DATABASE_
 
 ## 8. Mises à jour
 
+**Automatique (recommandé)** : push sur `main` → workflow [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) (build CI + rsync + `prisma db push` + restart Passenger). Voir § CI ci-dessous.
+
+**Manuel** :
+
 ```bash
 source ~/nodevenv/veote/20/bin/activate
 cd ~/veote
@@ -173,6 +177,30 @@ npx prisma migrate deploy   # si nouvelles migrations
 npm run build
 # Setup Node.js App → Restart
 ```
+
+---
+
+## CI / GitHub Actions
+
+Workflow : `.github/workflows/deploy.yml` — déclenché sur **push à `main`** (et `workflow_dispatch`).
+
+1. Runner `ubuntu-latest` : Node **20**, `npm ci`, `npx prisma generate`, `npm run build`
+2. **rsync** over SSH des artefacts prod : `.next`, `public`, `prisma`, `scripts`, `server.js`, `package.json`, `package-lock.json`, `next.config.*`
+3. Sur le serveur : `source` du nodevenv → `npm ci --omit=dev` → `npx prisma db push` → `touch tmp/restart.txt` (Passenger)
+
+Exclusions permanentes : `.env`, `node_modules`, `.git` (le `.env` / variables cPanel restent sur le serveur).
+
+### Secrets GitHub requis
+
+| Secret | Rôle |
+|--------|------|
+| `O2SWITCH_HOST` | Hostname SSH |
+| `O2SWITCH_USER` | Utilisateur SSH |
+| `O2SWITCH_SSH_KEY` | Clé privée SSH (PEM) |
+| `O2SWITCH_APP_DIR` | Racine app absolue (ex. `/home/USER/veote`) |
+| `O2SWITCH_NODE_VENV` | Script `activate` Node cPanel (ex. `/home/USER/nodevenv/veote/20/bin/activate`) |
+
+**Ne pas** ajouter `DATABASE_URL` aux secrets GitHub : `prisma generate` en CI n’en a pas besoin ; `db push` lit l’URL sur le serveur (`.env` ou variables Setup Node.js App).
 
 ---
 
