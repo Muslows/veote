@@ -14,6 +14,13 @@ Déploiement cible : **o2switch** (Phusion Passenger, `output: "standalone"`).
 Méthodologie & mentions : [`/methodologie`](./app/methodologie/page.tsx).  
 Guide déploiement : [`DEPLOY_O2SWITCH.md`](./DEPLOY_O2SWITCH.md).
 
+## CI / déploiement
+
+Push sur `main` → [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) build sur GitHub Actions puis déploie sur o2switch (rsync + SSH).
+
+Secrets requis : `O2SWITCH_HOST`, `O2SWITCH_USER`, `O2SWITCH_SSH_KEY`, `O2SWITCH_APP_DIR`, `O2SWITCH_NODE_VENV`.  
+Détails : [`DEPLOY_O2SWITCH.md`](./DEPLOY_O2SWITCH.md) § CI / GitHub Actions. Pas de `DATABASE_URL` dans GitHub — la DB est lue sur le serveur.
+
 ## Prérequis
 
 - Node.js ≥ 20

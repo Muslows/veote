@@ -1,0 +1,130 @@
+# Veote — auto-deploy to o2switch on push to main
+#
+# Required GitHub Actions secrets (Settings → Secrets and variables → Actions):
+#   O2SWITCH_HOST      — SSH hostname (e.g. your o2switch server)
+#   O2SWITCH_USER      — SSH username
+#   O2SWITCH_SSH_KEY   — private key for SSH (full PEM)
+#   O2SWITCH_APP_DIR   — absolute app root on the server (e.g. /home/USER/veote)
+#   O2SWITCH_NODE_VENV — path to cPanel Node activate script
+#                        (e.g. /home/USER/nodevenv/veote/20/bin/activate)
+#
+# Do NOT put DATABASE_URL in GitHub secrets: prisma generate on the runner
+# does not need a DB; `prisma db push` on the server uses the server .env /
+# cPanel env vars. Never sync .env from CI.
+#
+# See also: DEPLOY_O2SWITCH.md § CI / GitHub Actions
+
+name: Deploy o2switch
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-o2switch
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Build (standalone + copy-standalone-assets)
+        run: npm run build
+
+      - name: Start ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.O2SWITCH_SSH_KEY }}
+
+      - name: Add host to known_hosts
+        env:
+          O2SWITCH_HOST: ${{ secrets.O2SWITCH_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "$O2SWITCH_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Rsync production files
+        env:
+          O2SWITCH_HOST: ${{ secrets.O2SWITCH_HOST }}
+          O2SWITCH_USER: ${{ secrets.O2SWITCH_USER }}
+          O2SWITCH_APP_DIR: ${{ secrets.O2SWITCH_APP_DIR }}
+        run: |
+          set -euo pipefail
+          DEST="${O2SWITCH_USER}@${O2SWITCH_HOST}:${O2SWITCH_APP_DIR}"
+          RSH="ssh -o StrictHostKeyChecking=yes"
+
+          # Sync build + runtime sources only. Always exclude secrets & deps.
+          # --delete on content dirs so stale chunks/schema files disappear.
+          # Do not --delete the app root (preserves server .env, logs, tmp, node_modules).
+          rsync -avz --delete \
+            --exclude '.env' \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            -e "$RSH" \
+            .next/ "${DEST}/.next/"
+
+          rsync -avz --delete \
+            --exclude '.env' \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            -e "$RSH" \
+            public/ "${DEST}/public/"
+
+          rsync -avz --delete \
+            --exclude '.env' \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            -e "$RSH" \
+            prisma/ "${DEST}/prisma/"
+
+          rsync -avz --delete \
+            --exclude '.env' \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            -e "$RSH" \
+            scripts/ "${DEST}/scripts/"
+
+          rsync -avz \
+            --exclude '.env' \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            -e "$RSH" \
+            server.js package.json package-lock.json next.config.* \
+            "${DEST}/"
+
+      - name: Install, migrate schema, restart Passenger
+        env:
+          O2SWITCH_HOST: ${{ secrets.O2SWITCH_HOST }}
+          O2SWITCH_USER: ${{ secrets.O2SWITCH_USER }}
+          O2SWITCH_APP_DIR: ${{ secrets.O2SWITCH_APP_DIR }}
+          O2SWITCH_NODE_VENV: ${{ secrets.O2SWITCH_NODE_VENV }}
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=yes \
+            "${O2SWITCH_USER}@${O2SWITCH_HOST}" \
+            "set -euo pipefail
+             source \"${O2SWITCH_NODE_VENV}\"
+             cd \"${O2SWITCH_APP_DIR}\"
+             npm ci --omit=dev
+             npx prisma db push
+             mkdir -p tmp && touch tmp/restart.txt"
