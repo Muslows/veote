@@ -30,7 +30,7 @@ export async function generateMetadata({
 
 /**
  * Fiche sondage — mentions Commission + résultats + SourceBadge.
- * Copier vers : app/c/[slug]/page.tsx
+ * Copier vers : app/sondages/[slug]/page.tsx
  */
 export default async function PollDetailPage({ params }: PageProps) {
   const { slug } = await params;

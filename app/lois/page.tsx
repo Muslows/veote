@@ -32,7 +32,7 @@ type PageProps = {
 
 /**
  * Liste / recherche Module B.
- * Copier vers : app/b/page.tsx
+ * Copier vers : app/lois/page.tsx
  */
 export default async function ModuleBIndexPage({ searchParams }: PageProps) {
   const raw = await searchParams;

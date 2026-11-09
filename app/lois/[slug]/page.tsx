@@ -38,7 +38,7 @@ export async function generateMetadata({
 
 /**
  * Fiche loi — vote, répartition par groupe, arguments sourcés, SourceBadge.
- * Copier vers : app/b/[slug]/page.tsx
+ * Copier vers : app/lois/[slug]/page.tsx
  */
 export default async function LawDetailPage({ params }: PageProps) {
   const { slug } = await params;

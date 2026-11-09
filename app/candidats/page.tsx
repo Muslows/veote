@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 /**
  * Liste Module A — candidats + accès partis.
- * Copier vers : app/a/page.tsx (ou app/(modules)/a/page.tsx)
+ * Copier vers : app/candidats/page.tsx
  */
 export default async function ModuleAIndexPage() {
   const [candidates, parties] = await Promise.all([

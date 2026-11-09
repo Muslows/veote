@@ -1,0 +1,29 @@
+# Veote — document root du domaine (≠ Application root Passenger)
+#
+# Placer CE fichier dans le document root Apache du domaine (ex. ~/votredomaine.tld/),
+# PAS dans public/ Next, PAS comme seul moyen de servir l’app.
+#
+# cPanel « Setup Node.js App » génère/maintient le bloc Passenger ci-dessous.
+# Adapter les chemins USER / nodevenv / Application root après Create Application.
+# Ne pas ajouter de RewriteRule/ErrorDocument qui renvoient 404 avant Passenger :
+# les routes App Router (/candidats, /lois, …) ne sont pas des fichiers sur disque.
+
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/USER/veote"
+PassengerBaseURI "/"
+PassengerNodejs "/home/USER/nodevenv/veote/20/bin/node"
+PassengerAppType node
+PassengerStartupFile server.js
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+
+# Évite qu’Apache cherche un fichier physique et réponde 404 avant Node.
+Options -MultiViews -Indexes
+DirectoryIndex disabled
+
+# Si un fichier réellement présent à la racine document (rare) existe, le servir ;
+# sinon laisser Passenger traiter l’URL (pas de fallback ErrorDocument 404).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+</IfModule>
