@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Veote — variables CSS Slate Dark
+ * Fond #0F172A · cartes #1E293B · bordures #334155 · texte #F8FAFC
+ * Accents slate/blue neutres uniquement (pas de couleurs partisanes globales).
+ */
+
+:root {
+  --veote-bg: #0f172a;
+  --veote-card: #1e293b;
+  --veote-border: #334155;
+  --veote-text: #f8fafc;
+  --veote-muted: #94a3b8;
+  --veote-accent: #3b82f6;
+  --veote-accent-soft: #1e3a5f;
+  --veote-focus: #60a5fa;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    background-color: var(--veote-bg);
+    color: var(--veote-text);
+    @apply min-h-screen font-sans;
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -20%,
+        rgb(30 58 95 / 0.45),
+        transparent 70%
+      ),
+      linear-gradient(
+        180deg,
+        var(--veote-bg) 0%,
+        #0b1224 100%
+      );
+    background-attachment: fixed;
+  }
+
+  a {
+    @apply text-veote-accent underline-offset-4 transition-colors;
+  }
+
+  a:hover {
+    @apply text-veote-focus;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--veote-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: rgb(59 130 246 / 0.35);
+    color: var(--veote-text);
+  }
+}
+
+@layer components {
+  .veote-panel {
+    background-color: var(--veote-card);
+    border: 1px solid var(--veote-border);
+  }
+
+  .veote-divider {
+    border-color: var(--veote-border);
+  }
+}

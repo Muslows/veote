@@ -1,0 +1,866 @@
+// =============================================================================
+// Veote — schema.prisma (Modules A + B validés + Module C)
+// Civic-tech neutre — présidentielle FR 2027
+// PostgreSQL UNIQUEMENT (o2switch)
+// Toute entité métier doit être reliée à au moins une Source.
+//
+// HATVP — lignes de détail optionnelles (étape 4) :
+//   • HatvpAsset / HatvpInterest sont des collections 0..n (jamais obligatoires).
+//   • Un candidat peut n'avoir aucune HatvpDeclaration.
+//   • UI Module A : si aucune déclaration récente → lien portail général
+//     https://www.hatvp.fr/ + SourceBadge (pas d'état vide cassé).
+//   • Ne jamais inventer de montants patrimoniaux ; seed = données sourcées
+//     ou absence explicite de lignes détail.
+//
+// Module B (Assemblée nationale v1) :
+//   • Champs an*Uid pour Open Data AN (data.assemblee-nationale.fr).
+//   • importedAt / lastSyncedAt pour cron scripts/sync-an.ts.
+//   • Chamber.SENAT réservé — pas d’import ni d’UI Sénat en v1.
+//   • LawArgument = synthèse d’arguments sourcée par camp (Pour/Contre).
+//
+// Module C (sondages & simulateur) :
+//   • Poll : champs Commission obligatoires + isTestStructure pour les
+//     structures d’exemple (jamais présentées comme intentions 2027 réelles).
+//   • VoteTransferMatrix : POLL_LINKED ou EDITORIAL_SOURCED (sources obligatoires).
+//   • TransferEdge : report vers candidat OU abstention/blanc (toKind).
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+/// Type d’organisme / provenance d’une source
+enum SourceKind {
+  HATVP
+  ASSEMBLEE_NATIONALE
+  SENAT // réservé (sources Sénat hors v1 Module B)
+  JOURNAL_OFFICIEL
+  COMMISSION_DES_SONDAGES
+  INSTITUT_SONDAGE
+  PARTI_OFFICIEL
+  MEDIA
+  ONG_CIVIC // ex. Datan, NosDéputés, Decodex…
+  AUTRE
+}
+
+/// Tour de scrutin concerné (sondage / transfert)
+enum ElectionRound {
+  PREMIER_TOUR
+  SECOND_TOUR
+  HYPOTHESE // scénario simulé, pas un tour réel
+}
+
+/// Type d’événement dans la généalogie des partis
+enum PartyHistoryEventType {
+  CREATION
+  RENOMMAGE
+  FUSION // plusieurs → un (participants N-aires)
+  SCISSION // un → plusieurs (participants N-aires)
+  ABSORPTION // A absorbe B (+ éventuels autres)
+  ALLIANCE // coalition / fédération sans fusion juridique
+  DISSOLUTION
+  AFFILIATION // rattachement à une fédération / parti européen
+}
+
+/// Rôle d’un parti dans un événement de généalogie (table participants N-aire)
+enum PartyHistoryParticipantRole {
+  SUBJECT // parti sujet / résultant (ex. parti fusionné créé)
+  PREDECESSOR // parti d’origine (fusionné, absorbé, scindé, renommé…)
+  SUCCESSOR // parti issu (scission, renommage cible…)
+  PARTNER // partenaire d’alliance / coalition
+}
+
+/// Origine d’une matrice de report de voix (Module C)
+enum VoteTransferOrigin {
+  POLL_LINKED // liée à un Poll (pollId requis côté app)
+  EDITORIAL_SOURCED // matrice éditoriale toujours sourcée (Source obligatoire)
+}
+
+/// Chambre parlementaire — Module B v1 = Assemblée nationale uniquement
+enum Chamber {
+  ASSEMBLEE_NATIONALE
+  SENAT // réservé — hors périmètre v1
+}
+
+/// Type de texte législatif (Module B)
+enum LawType {
+  PROJET_DE_LOI
+  PROPOSITION_DE_LOI
+  PROPOSITION_DE_RESOLUTION
+  ORDONNANCE
+  AUTRE
+}
+
+/// Statut d’une loi / texte
+enum LawStatus {
+  EN_COURS
+  ADOPTE
+  REJETE
+  RETIRE
+  PROMULGUE
+}
+
+/// Auteur / initiateur d’un texte (Module B)
+enum LawAuthorKind {
+  GOUVERNEMENT
+  GROUPE_PARLEMENTAIRE
+  DEPUTE
+  AUTRE
+}
+
+/// Camp d’un argument sourcé (synthèse neutre Module B)
+enum LawArgumentCamp {
+  POUR
+  CONTRE
+  ABSTENTION
+}
+
+/// Type de scrutin parlementaire
+enum VoteRecordType {
+  ORDINAIRE
+  SOLENNEL
+  MOTION_DE_CENSURE
+  ENGAGEMENT_RESPONSABILITE // art. 49.3 etc.
+  AUTRE
+}
+
+/// Position de vote individuelle ou de groupe
+enum VotePositionValue {
+  POUR
+  CONTRE
+  ABSTENTION
+  NON_VOTANT
+  ABSENT
+}
+
+/// Catégorie HATVP (simplified — alignable sur nomenclatures HATVP)
+enum HatvpDeclarationKind {
+  PATRIMOINE
+  INTERETS
+  LES_DEUX
+}
+
+/// Rôle d’un commanditaire de sondage
+enum PollSponsorKind {
+  MEDIA
+  PARTI
+  CANDIDAT
+  INSTITUTION
+  ENTREPRISE
+  AUTRE
+}
+
+/// Destination d’un arc de report (Module C simulateur)
+enum TransferTargetKind {
+  CANDIDATE
+  /// Abstention + blancs/nuls agrégés (hors suffrages exprimés)
+  ABSTENTION_BLANC
+}
+
+// -----------------------------------------------------------------------------
+// Source — bloc transverse OBLIGATOIRE
+// -----------------------------------------------------------------------------
+
+/// Provenance citoyenne / légale. Affichée via SourceBadge.
+model Source {
+  id          String     @id @default(cuid())
+  /// URL canonique (JO, HATVP, notice Commission, etc.) — obligatoire produit
+  url         String
+  /// Libellé court affiché (ex. « HATVP — Déclaration 2024 »)
+  label       String
+  kind        SourceKind
+  /// Organisme émetteur (HATVP, IFOP, Assemblée nationale…)
+  organism    String?
+  /// Date de publication / avis officiel côté source
+  publishedAt DateTime?
+  /// Date de collecte Veote
+  collectedAt DateTime   @default(now())
+  /// Note éditoriale neutre (méthodo, réserve)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations — chaque bloc métier
+  candidates              CandidateSource[]
+  parties                 PoliticalPartySource[]
+  partyHistory            PoliticalPartyHistorySource[]
+  affiliations            CandidatePartyAffiliationSource[]
+  hatvpDeclarations       HatvpDeclarationSource[]
+  laws                    LawSource[]
+  lawArguments            LawArgumentSource[]
+  voteRecords             VoteRecordSource[]
+  parliamentaryGroups     ParliamentaryGroupSource[]
+  deputyMandates          DeputyMandateSource[]
+  polls                   PollSource[]
+  transferMatrices        VoteTransferMatrixSource[]
+
+  @@index([kind])
+  @@index([organism])
+  @@index([url])
+}
+
+// -----------------------------------------------------------------------------
+// Module A — Partis & généalogie (fusions N-aires)
+// -----------------------------------------------------------------------------
+
+model PoliticalParty {
+  id          String    @id @default(cuid())
+  /// Slug Unicode (accents conservés). Homonymes : suffixe année ou -2, -3…
+  slug        String    @unique
+  /// Note courte si slug désambiguïsé (ex. « homonyme »)
+  slugNote    String?
+  name        String
+  /// Sigle / abréviation (RN, LFI, LR…)
+  acronym     String?
+  /// Couleur hex d’affichage locale (pas de couleur partisane dans le thème global)
+  colorHex    String?
+  /// Date de fondation si connue
+  foundedOn   DateTime? @db.Date
+  dissolvedOn DateTime? @db.Date
+  isActive    Boolean   @default(true)
+  summary     String?
+  websiteUrl  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  affiliations CandidatePartyAffiliation[]
+  /// Événements où ce parti est le sujet principal (raccourci d’index)
+  historyAsSubject PoliticalPartyHistory[] @relation("HistorySubject")
+  /// Participations N-aires (fusions multi-partis, scissions, alliances…)
+  historyParticipations PoliticalPartyHistoryParticipant[]
+  sources     PoliticalPartySource[]
+  groupLinks  ParliamentaryGroup[]
+
+  @@index([acronym])
+  @@index([isActive])
+}
+
+model PoliticalPartySource {
+  partyId  String
+  sourceId String
+  party    PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  source   Source         @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([partyId, sourceId])
+}
+
+/// Généalogie politique : fusion / scission / renommage / alliance
+/// Les arêtes multi-partis passent par PoliticalPartyHistoryParticipant (N-aire).
+model PoliticalPartyHistory {
+  id             String                @id @default(cuid())
+  eventType      PartyHistoryEventType
+  /// Parti « sujet » de l’événement (ex. parti résultant d’une fusion) — index rapide
+  subjectPartyId String
+  subjectParty   PoliticalParty        @relation("HistorySubject", fields: [subjectPartyId], references: [id], onDelete: Restrict)
+  effectiveOn    DateTime              @db.Date
+  label          String // ex. « Fusion PÉ / GE / Les Verts → EELV »
+  description    String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  participants PoliticalPartyHistoryParticipant[]
+  sources      PoliticalPartyHistorySource[]
+
+  @@index([subjectPartyId, effectiveOn])
+  @@index([eventType])
+}
+
+/// Participant N-aire à un événement de généalogie (remplace les arêtes binaires parent/enfant)
+model PoliticalPartyHistoryParticipant {
+  id        String                      @id @default(cuid())
+  historyId String
+  history   PoliticalPartyHistory       @relation(fields: [historyId], references: [id], onDelete: Cascade)
+  partyId   String
+  party     PoliticalParty              @relation(fields: [partyId], references: [id], onDelete: Restrict)
+  role      PartyHistoryParticipantRole
+  /// Ordre d’affichage (ex. partis fusionnés listés)
+  sortOrder Int                         @default(0)
+  createdAt DateTime                    @default(now())
+
+  @@unique([historyId, partyId, role])
+  @@index([partyId])
+  @@index([historyId, role])
+}
+
+model PoliticalPartyHistorySource {
+  historyId String
+  sourceId  String
+  history   PoliticalPartyHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
+  source    Source                @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([historyId, sourceId])
+}
+
+// -----------------------------------------------------------------------------
+// Module A — Candidats
+// -----------------------------------------------------------------------------
+
+model Candidate {
+  id             String    @id @default(cuid())
+  /// Slug Unicode (accents conservés). Homonymes : suffixe année de naissance ou -2, -3…
+  slug           String    @unique
+  /// Note courte si slug désambiguïsé (ex. « homonyme — né en 1972 »)
+  slugNote       String?
+  firstName      String
+  lastName       String
+  /// Nom d’usage affiché (ex. « Marine Le Pen »)
+  displayName    String
+  birthDate      DateTime? @db.Date
+  birthPlace     String?
+  /// Résumé biographique neutre, sourcé
+  bio            String?
+  photoUrl       String?
+  websiteUrl     String?
+  /// Candidature déclarée / pressentie pour 2027
+  isDeclared2027 Boolean   @default(false)
+  /// Ordre d’affichage éventuel (bulletin, etc.)
+  ballotOrder    Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  affiliations  CandidatePartyAffiliation[]
+  hatvpDecls    HatvpDeclaration[]
+  pollResults   PollResult[]
+  transferFrom  TransferEdge[]              @relation("TransferFrom")
+  transferTo    TransferEdge[]              @relation("TransferTo")
+  matricesAsFinalistA VoteTransferMatrix[] @relation("MatrixFinalistA")
+  matricesAsFinalistB VoteTransferMatrix[] @relation("MatrixFinalistB")
+  votePositions VotePosition[]
+  mandates      DeputyMandate[]
+  sources       CandidateSource[]
+
+  @@index([lastName, firstName])
+  @@index([isDeclared2027])
+}
+
+model CandidateSource {
+  candidateId String
+  sourceId    String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  source      Source    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([candidateId, sourceId])
+}
+
+model CandidatePartyAffiliation {
+  id          String         @id @default(cuid())
+  candidateId String
+  partyId     String
+  candidate   Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  party       PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Restrict)
+  startedOn   DateTime       @db.Date
+  endedOn     DateTime?      @db.Date
+  role        String? // ex. « membre », « porte-parole », « président »
+  isPrimary   Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  sources CandidatePartyAffiliationSource[]
+
+  @@index([candidateId, startedOn])
+  @@index([partyId])
+}
+
+model CandidatePartyAffiliationSource {
+  affiliationId String
+  sourceId      String
+  affiliation   CandidatePartyAffiliation @relation(fields: [affiliationId], references: [id], onDelete: Cascade)
+  source        Source                    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([affiliationId, sourceId])
+}
+
+// -----------------------------------------------------------------------------
+// Module A — HATVP (modèle normalisé — décision verrouillée)
+// Lignes HatvpAsset / HatvpInterest : OPTIONNELLES (0..n).
+// Fallback UI si candidat sans déclaration Veote :
+//   lien https://www.hatvp.fr/ + SourceBadge « Portail HATVP ».
+// -----------------------------------------------------------------------------
+
+model HatvpDeclaration {
+  id           String               @id @default(cuid())
+  candidateId  String
+  candidate    Candidate            @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  kind         HatvpDeclarationKind
+  /// Identifiant / référence HATVP si disponible
+  hatvpRef     String?
+  /// URL directe vers la déclaration ou fiche nominative HATVP
+  /// (si inconnue : utiliser https://www.hatvp.fr/ côté UI, pas une URL inventée)
+  hatvpUrl     String
+  declaredOn   DateTime?            @db.Date
+  publishedOn  DateTime?            @db.Date
+  mandateLabel String? // ex. « Député · 15e législature »
+  /// Résumé neutre ; peut indiquer que les lignes détail ne sont pas importées
+  summary      String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  /// OPTIONNEL — 0..n. Ne pas inventer de montants (amountEuros).
+  assets    HatvpAsset[]
+  /// OPTIONNEL — 0..n. Activités / mandats normalisés si sourcés HATVP.
+  interests HatvpInterest[]
+  sources   HatvpDeclarationSource[]
+
+  @@unique([candidateId, hatvpRef])
+  @@index([candidateId])
+  @@index([hatvpUrl])
+}
+
+model HatvpDeclarationSource {
+  declarationId String
+  sourceId      String
+  declaration   HatvpDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  source        Source           @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([declarationId, sourceId])
+}
+
+/// Actif / élément de patrimoine normalisé (HATVP) — OPTIONNEL par déclaration.
+/// Seed / import : uniquement montants publiés HATVP vérifiés ; sinon omettre la ligne.
+model HatvpAsset {
+  id            String           @id @default(cuid())
+  declarationId String
+  declaration   HatvpDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  category      String // immobilier, financier, société…
+  label         String
+  /// Montant en euros si publié / chiffré HATVP (null si non chiffré — jamais inventé)
+  amountEuros   Decimal?         @db.Decimal(14, 2)
+  notes         String?
+  createdAt     DateTime         @default(now())
+
+  @@index([declarationId])
+  @@index([category])
+}
+
+/// Intérêt / activité / mandat normalisé (HATVP) — OPTIONNEL par déclaration.
+model HatvpInterest {
+  id            String           @id @default(cuid())
+  declarationId String
+  declaration   HatvpDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  category      String // activité pro, mandat, participation…
+  label         String
+  organization  String?
+  startedOn     DateTime?        @db.Date
+  endedOn       DateTime?        @db.Date
+  notes         String?
+  createdAt     DateTime         @default(now())
+
+  @@index([declarationId])
+  @@index([category])
+}
+
+// -----------------------------------------------------------------------------
+// Module B — Lois & votes (Datan-like) — Assemblée nationale v1
+// -----------------------------------------------------------------------------
+
+model ParliamentaryGroup {
+  id          String          @id @default(cuid())
+  slug        String          @unique
+  slugNote    String?
+  name        String
+  acronym     String?
+  /// Lien optionnel vers un parti politique
+  partyId     String?
+  party       PoliticalParty? @relation(fields: [partyId], references: [id], onDelete: SetNull)
+  colorHex    String?
+  legislature Int // ex. 16
+  /// Chambre — v1 : ASSEMBLEE_NATIONALE uniquement
+  chamber     Chamber         @default(ASSEMBLEE_NATIONALE)
+  isActive    Boolean         @default(true)
+  /// UID Open Data AN de l’organe (ex. PO730964)
+  anOrganeUid String?         @unique
+  /// Première importation Open Data AN
+  importedAt  DateTime?
+  /// Dernière synchro scripts/sync-an.ts
+  lastSyncedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  mandates     DeputyMandate[]
+  positions    VotePosition[]
+  authoredLaws Law[]
+  sources      ParliamentaryGroupSource[]
+
+  @@index([legislature, isActive])
+  @@index([partyId])
+  @@index([chamber])
+  @@index([anOrganeUid])
+}
+
+model ParliamentaryGroupSource {
+  groupId  String
+  sourceId String
+  group    ParliamentaryGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  source   Source             @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([groupId, sourceId])
+}
+
+/// Mandat parlementaire (historique) — peut relier un Candidate
+/// v1 : chamber = ASSEMBLEE_NATIONALE uniquement (SENAT réservé)
+model DeputyMandate {
+  id              String             @id @default(cuid())
+  candidateId     String?
+  candidate       Candidate?         @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  groupId         String?
+  group           ParliamentaryGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  /// Nom affiché si pas (encore) lié à un Candidate
+  displayName     String
+  chamber         Chamber            @default(ASSEMBLEE_NATIONALE)
+  legislature     Int
+  circonscription String?
+  startedOn       DateTime           @db.Date
+  endedOn         DateTime?          @db.Date
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  positions VotePosition[]
+  sources   DeputyMandateSource[]
+
+  @@index([candidateId])
+  @@index([groupId])
+  @@index([legislature, chamber])
+}
+
+model DeputyMandateSource {
+  mandateId String
+  sourceId  String
+  mandate   DeputyMandate @relation(fields: [mandateId], references: [id], onDelete: Cascade)
+  source    Source        @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([mandateId, sourceId])
+}
+
+model Law {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  slugNote      String?
+  title         String
+  /// Référence officielle (ex. « n° 2024-42 »)
+  officialRef   String?
+  lawType       LawType
+  status        LawStatus      @default(EN_COURS)
+  /// URL dossier législatif Assemblée (obligatoire produit) — v1 : sources AN
+  officialUrl   String
+  /// Chambre d’origine principale — v1 : ASSEMBLEE_NATIONALE
+  chamber       Chamber        @default(ASSEMBLEE_NATIONALE)
+  introducedOn  DateTime?      @db.Date
+  adoptedOn     DateTime?      @db.Date
+  promulgatedOn DateTime?      @db.Date
+  /// Résumé neutre (exposé des motifs / Vie-publique) — jamais inventé
+  summary       String?
+  /// URL Vie-publique (ou autre) si le résumé en est tiré
+  summaryUrl    String?
+  legislature   Int?
+  /// Thème principal (filtre UI) — slug stable ex. « immigration »
+  themeSlug     String?
+  /// Libellé thème affiché
+  themeLabel    String?
+  /// Auteur : Gouvernement ou groupe parlementaire
+  authorKind    LawAuthorKind  @default(GOUVERNEMENT)
+  /// Libellé auteur (ex. « Gouvernement », « Groupe LIOT »)
+  authorLabel   String?
+  authorGroupId String?
+  authorGroup   ParliamentaryGroup? @relation(fields: [authorGroupId], references: [id], onDelete: SetNull)
+  /// UID Open Data AN du dossier législatif (ex. DLR5L16N47118)
+  anDossierUid  String?        @unique
+  /// UID texte / document AN si distinct du dossier
+  anTexteUid    String?
+  /// Première importation Open Data AN
+  importedAt    DateTime?
+  /// Dernière synchro scripts/sync-an.ts
+  lastSyncedAt  DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  votes     VoteRecord[]
+  arguments LawArgument[]
+  sources   LawSource[]
+
+  @@index([status])
+  @@index([lawType])
+  @@index([legislature])
+  @@index([chamber])
+  @@index([officialUrl])
+  @@index([themeSlug])
+  @@index([authorKind])
+  @@index([authorGroupId])
+  @@index([anDossierUid])
+  @@index([adoptedOn])
+  @@index([introducedOn])
+}
+
+model LawSource {
+  lawId    String
+  sourceId String
+  law      Law    @relation(fields: [lawId], references: [id], onDelete: Cascade)
+  source   Source @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([lawId, sourceId])
+}
+
+/// Synthèse d’arguments sourcée par camp (exposé des motifs, débats publics)
+/// — jamais inventée ; chaque ligne porte au moins une Source.
+model LawArgument {
+  id        String           @id @default(cuid())
+  lawId     String
+  law       Law              @relation(fields: [lawId], references: [id], onDelete: Cascade)
+  camp      LawArgumentCamp
+  title     String
+  body      String
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  sources LawArgumentSource[]
+
+  @@index([lawId, camp])
+}
+
+model LawArgumentSource {
+  argumentId String
+  sourceId   String
+  argument   LawArgument @relation(fields: [argumentId], references: [id], onDelete: Cascade)
+  source     Source      @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([argumentId, sourceId])
+}
+
+model VoteRecord {
+  id          String         @id @default(cuid())
+  lawId       String?
+  law         Law?           @relation(fields: [lawId], references: [id], onDelete: SetNull)
+  /// Numéro de scrutin Assemblée (ex. « 3213 »)
+  scrutinRef  String?
+  /// UID Open Data AN du scrutin (ex. VTANR5L16V3213)
+  anScrutinUid String?       @unique
+  title       String
+  voteType    VoteRecordType @default(ORDINAIRE)
+  /// v1 : ASSEMBLEE_NATIONALE uniquement
+  chamber     Chamber        @default(ASSEMBLEE_NATIONALE)
+  votedOn     DateTime       @db.Date
+  /// URL officielle du scrutin (obligatoire produit)
+  officialUrl String
+  pour        Int            @default(0)
+  contre      Int            @default(0)
+  abstention  Int            @default(0)
+  nonVotant   Int            @default(0)
+  adopted     Boolean?
+  legislature Int?
+  /// Première importation Open Data AN
+  importedAt  DateTime?
+  /// Dernière synchro scripts/sync-an.ts
+  lastSyncedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  positions VotePosition[]
+  sources   VoteRecordSource[]
+
+  @@index([lawId])
+  @@index([votedOn])
+  @@index([chamber, legislature])
+  @@index([officialUrl])
+  @@index([anScrutinUid])
+  @@unique([scrutinRef, chamber])
+}
+
+model VoteRecordSource {
+  voteRecordId String
+  sourceId     String
+  voteRecord   VoteRecord @relation(fields: [voteRecordId], references: [id], onDelete: Cascade)
+  source       Source     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([voteRecordId, sourceId])
+}
+
+model VotePosition {
+  id               String              @id @default(cuid())
+  voteRecordId     String
+  voteRecord       VoteRecord          @relation(fields: [voteRecordId], references: [id], onDelete: Cascade)
+  /// Position individuelle (mandat) OU agrégat de groupe — l’un des deux
+  mandateId        String?
+  mandate          DeputyMandate?      @relation(fields: [mandateId], references: [id], onDelete: SetNull)
+  /// Lien optionnel direct candidat (si mandat non résolu)
+  candidateId      String?
+  candidate        Candidate?          @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  groupId          String?
+  group            ParliamentaryGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  position         VotePositionValue
+  /// true = ligne agrégée groupe, false = vote nominal
+  isGroupAggregate Boolean             @default(false)
+  /// Effectif pour une ligne agrégée de groupe (ex. 131 Pour Renaissance)
+  /// — null pour un vote nominal individuel
+  count            Int?
+  createdAt        DateTime            @default(now())
+
+  @@index([voteRecordId, position])
+  @@index([mandateId])
+  @@index([candidateId])
+  @@index([groupId])
+  @@index([voteRecordId, groupId, position])
+}
+
+// -----------------------------------------------------------------------------
+// Module C — Sondages (Commission des sondages)
+// -----------------------------------------------------------------------------
+
+model Poll {
+  id String @id @default(cuid())
+
+  /// Slug Unicode pour URLs (/c/[slug]) — accents conservés
+  slug     String  @unique
+  slugNote String?
+
+  /// Institut (IFOP, Ipsos, OpinionWay…)
+  institute String
+  /// Commanditaire
+  sponsor     String
+  sponsorKind PollSponsorKind @default(MEDIA)
+
+  /// Terrain (fieldwork) — champs Commission des sondages
+  fieldworkStart DateTime @db.Date
+  fieldworkEnd   DateTime @db.Date
+  sampleSize     Int
+  /// Marge d’erreur en points de % (ex. 2.2)
+  marginOfError  Decimal  @db.Decimal(4, 2)
+  /// Population interrogée (ex. « inscrits sur les listes électorales »)
+  population     String?
+  methodology    String? // téléphone, online, quota…
+
+  round ElectionRound @default(PREMIER_TOUR)
+  /// Titre éditorial neutre — préfixer `[Sondage de test - Structure Commission des sondages]` si isTestStructure
+  title String
+  /// Année électorale de référence (2017, 2022…) — null si structure de test hors cycle
+  electionYear Int?
+  /// true = structure d’exemple Commission (pas une intention 2027 réelle)
+  isTestStructure Boolean @default(false)
+  /// URL de la notice / publication auprès de la Commission des sondages (obligatoire)
+  commissionNoticeUrl String
+  /// URL du rapport institut (si distinct)
+  reportUrl String?
+
+  publishedOn DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  results  PollResult[]
+  matrices VoteTransferMatrix[]
+  sources  PollSource[]
+
+  @@index([institute])
+  @@index([fieldworkEnd])
+  @@index([round])
+  @@index([electionYear])
+  @@index([isTestStructure])
+  @@index([commissionNoticeUrl])
+}
+
+model PollSource {
+  pollId   String
+  sourceId String
+  poll     Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  source   Source @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([pollId, sourceId])
+}
+
+model PollResult {
+  id          String     @id @default(cuid())
+  pollId      String
+  poll        Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  candidateId String?
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  /// Si intention « autre / blanc / indécis » sans candidat
+  label       String?
+  /// Intention de vote en %
+  percent     Decimal    @db.Decimal(5, 2)
+  createdAt   DateTime   @default(now())
+
+  @@index([pollId])
+  @@index([candidateId])
+  @@unique([pollId, candidateId, label])
+}
+
+// -----------------------------------------------------------------------------
+// Module C — Transferts / simulateur 2ᵉ tour
+// poll-linked + matrices éditoriales sourcées (décision verrouillée)
+// -----------------------------------------------------------------------------
+
+/// Matrice de reports pour une hypothèse de second tour
+model VoteTransferMatrix {
+  id    String             @id @default(cuid())
+  /// Slug stable pour URL partageable (?matrix=…)
+  slug  String             @unique
+  /// POLL_LINKED (pollId requis app) ou EDITORIAL_SOURCED (sources obligatoires)
+  origin VoteTransferOrigin
+  /// Sondage d’origine des reports — non null si origin = POLL_LINKED
+  pollId String?
+  poll   Poll?             @relation(fields: [pollId], references: [id], onDelete: SetNull)
+  label  String // ex. « Reports Ipsos — Macron vs Le Pen (2022) »
+  /// Année de l’étude post-électorale (2017, 2022…)
+  electionYear Int?
+  /// Finalistes du duel documenté (optionnel — utile aux matrices éditoriales)
+  finalistAId String?
+  finalistA   Candidate?   @relation("MatrixFinalistA", fields: [finalistAId], references: [id], onDelete: SetNull)
+  finalistBId String?
+  finalistB   Candidate?   @relation("MatrixFinalistB", fields: [finalistBId], references: [id], onDelete: SetNull)
+  /// Tour / hypothèse
+  round  ElectionRound     @default(HYPOTHESE)
+  /// Description méthodo (neutre)
+  methodology String?
+  effectiveOn DateTime?    @db.Date
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  edges   TransferEdge[]
+  sources VoteTransferMatrixSource[]
+
+  @@index([pollId])
+  @@index([origin])
+  @@index([round])
+  @@index([electionYear])
+  @@index([finalistAId, finalistBId])
+}
+
+model VoteTransferMatrixSource {
+  matrixId String
+  sourceId String
+  matrix   VoteTransferMatrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+  source   Source             @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([matrixId, sourceId])
+}
+
+/// Arc de report : part des électeurs de fromCandidate vers un finaliste OU abstention/blanc
+model TransferEdge {
+  id              String             @id @default(cuid())
+  matrixId        String
+  matrix          VoteTransferMatrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+  fromCandidateId String
+  fromCandidate   Candidate          @relation("TransferFrom", fields: [fromCandidateId], references: [id], onDelete: Restrict)
+  /// CANDIDATE → toCandidateId requis ; ABSTENTION_BLANC → toCandidateId null
+  toKind          TransferTargetKind @default(CANDIDATE)
+  toCandidateId   String?
+  toCandidate     Candidate?         @relation("TransferTo", fields: [toCandidateId], references: [id], onDelete: Restrict)
+  /// Clé de destination unique : candidateId ou « __ABSTENTION_BLANC__ »
+  targetKey       String
+  /// Pourcentage de report (0–100) — pour un même fromCandidate, somme des arcs ≈ 100
+  percent         Decimal            @db.Decimal(5, 2)
+  notes           String?
+  createdAt       DateTime           @default(now())
+
+  @@unique([matrixId, fromCandidateId, targetKey])
+  @@index([fromCandidateId])
+  @@index([toCandidateId])
+  @@index([toKind])
+}
