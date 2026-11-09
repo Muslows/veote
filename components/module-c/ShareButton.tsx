@@ -35,7 +35,7 @@ export function ShareButton({
       matrix,
       reservoirs,
     });
-    const url = `${window.location.origin}/c/simulateur${q}`;
+    const url = `${window.location.origin}/sondages/simulateur${q}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);

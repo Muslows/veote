@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  { href: "/a", label: "Candidats", module: "A" },
-  { href: "/b", label: "Lois", module: "B" },
-  { href: "/c", label: "Sondages", module: "C" },
+  { href: "/candidats", label: "Candidats", module: "A" },
+  { href: "/lois", label: "Lois", module: "B" },
+  { href: "/sondages", label: "Sondages", module: "C" },
 ] as const;
 
 /**

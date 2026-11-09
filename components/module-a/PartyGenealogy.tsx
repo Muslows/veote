@@ -100,7 +100,7 @@ export function PartyGenealogy({
                       {ROLE_FR[p.role] ?? p.role}
                     </span>
                     <Link
-                      href={`/a/partis/${encodeURIComponent(p.party.slug)}`}
+                      href={`/candidats/partis/${encodeURIComponent(p.party.slug)}`}
                       className="font-medium text-veote-text no-underline hover:text-veote-focus hover:underline"
                     >
                       {p.party.name}

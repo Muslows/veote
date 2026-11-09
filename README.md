@@ -7,9 +7,9 @@ Déploiement cible : **o2switch** (Phusion Passenger, `output: "standalone"`).
 
 | Module | Route | Contenu |
 |--------|-------|---------|
-| **A** — Candidats & partis | `/a` | Fiches, généalogie, HATVP |
-| **B** — Lois & votes | `/b` | Assemblée nationale (v1) |
-| **C** — Sondages & simulateur | `/c` | Commission des sondages + reports |
+| **A** — Candidats & partis | `/candidats` | Fiches, généalogie, HATVP |
+| **B** — Lois & votes | `/lois` | Assemblée nationale (v1) |
+| **C** — Sondages & simulateur | `/sondages` | Commission des sondages + reports |
 
 Méthodologie & mentions : [`/methodologie`](./app/methodologie/page.tsx).  
 Guide déploiement : [`DEPLOY_O2SWITCH.md`](./DEPLOY_O2SWITCH.md).

@@ -28,7 +28,7 @@ export function SiteFooter() {
             </li>
             <li>
               <Link
-                href="/a"
+                href="/candidats"
                 className="text-veote-muted no-underline hover:text-veote-text hover:underline"
               >
                 Candidats
@@ -36,7 +36,7 @@ export function SiteFooter() {
             </li>
             <li>
               <Link
-                href="/b"
+                href="/lois"
                 className="text-veote-muted no-underline hover:text-veote-text hover:underline"
               >
                 Lois
@@ -44,7 +44,7 @@ export function SiteFooter() {
             </li>
             <li>
               <Link
-                href="/c"
+                href="/sondages"
                 className="text-veote-muted no-underline hover:text-veote-text hover:underline"
               >
                 Sondages

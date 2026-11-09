@@ -41,7 +41,7 @@ export default async function PollDetailPage({ params }: PageProps) {
     <Container className="py-10 sm:py-14">
       <nav className="mb-6 text-sm text-veote-muted">
         <Link
-          href="/c"
+          href="/sondages"
           className="text-veote-muted no-underline hover:text-veote-focus hover:underline"
         >
           ← Observatoire des sondages
@@ -106,7 +106,7 @@ export default async function PollDetailPage({ params }: PageProps) {
 
           <div className="pt-2">
             <Link
-              href={`/c/simulateur?pollId=${encodeURIComponent(poll.id)}`}
+              href={`/sondages/simulateur?pollId=${encodeURIComponent(poll.id)}`}
               className="inline-flex text-sm font-medium text-veote-accent no-underline hover:text-veote-focus hover:underline"
             >
               Ouvrir dans le simulateur →
@@ -122,7 +122,7 @@ export default async function PollDetailPage({ params }: PageProps) {
                 {poll.matrices.map((m) => (
                   <li key={m.id}>
                     <Link
-                      href={`/c/simulateur?pollId=${encodeURIComponent(poll.id)}&matrix=${encodeURIComponent(m.slug)}`}
+                      href={`/sondages/simulateur?pollId=${encodeURIComponent(poll.id)}&matrix=${encodeURIComponent(m.slug)}`}
                       className="text-veote-accent no-underline hover:underline"
                     >
                       {m.label}

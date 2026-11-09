@@ -112,7 +112,7 @@ export default async function ModuleBIndexPage({ searchParams }: PageProps) {
                         ) : null}
                       </div>
                       <Link
-                        href={`/b/${encodeURIComponent(law.slug)}`}
+                        href={`/lois/${encodeURIComponent(law.slug)}`}
                         className="font-display text-lg font-semibold text-veote-text no-underline hover:text-veote-focus hover:underline"
                       >
                         {law.title}

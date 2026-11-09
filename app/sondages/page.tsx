@@ -57,13 +57,13 @@ export default async function ModuleCIndexPage({ searchParams }: PageProps) {
         </p>
         <nav className="flex flex-wrap gap-3 text-sm">
           <Link
-            href="/c/evolution"
+            href="/sondages/evolution"
             className="font-medium text-veote-accent no-underline hover:text-veote-focus hover:underline"
           >
             Évolution dans le temps
           </Link>
           <Link
-            href="/c/simulateur"
+            href="/sondages/simulateur"
             className="font-medium text-veote-accent no-underline hover:text-veote-focus hover:underline"
           >
             Simulateur 2ᵉ tour
@@ -117,7 +117,7 @@ export default async function ModuleCIndexPage({ searchParams }: PageProps) {
                         </span>
                       ) : null}
                       <Link
-                        href={`/c/${encodeURIComponent(poll.slug)}`}
+                        href={`/sondages/${encodeURIComponent(poll.slug)}`}
                         className="font-display text-lg font-semibold text-veote-text no-underline hover:text-veote-focus hover:underline"
                       >
                         {poll.title}

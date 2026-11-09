@@ -57,7 +57,7 @@ export default async function LawDetailPage({ params }: PageProps) {
     <Container className="py-10 sm:py-14">
       <nav className="mb-6 text-sm text-veote-muted">
         <Link
-          href="/b"
+          href="/lois"
           className="text-veote-muted no-underline hover:text-veote-focus hover:underline"
         >
           ← Lois &amp; votes

@@ -114,12 +114,22 @@ Si `next build` est tué (OOM) : builder en local, uploader `.next/` (dont `stan
 ## 5. Démarrer l’application
 
 1. Setup Node.js App → **Restart** / **Start App**.
-2. Ouvrir le domaine — vérifier `/`, `/a`, `/b`, `/c`, `/methodologie`.
+2. Ouvrir le domaine — vérifier `/`, `/candidats`, `/lois`, `/sondages`, `/methodologie`.
 3. Logs : `~/veote/logs/passenger.log` et éventuels logs Next.
 
 Passenger gère le process : **ne pas** lancer `node server.js` manuellement en parallèle.
 
-`server.js` préfère `.next/standalone/server.js` s’il existe ; sinon fallback `next` classique.
+Sous **Passenger**, `server.js` utilise toujours le handler Next classique avec
+`listen("passenger")` (le `server.js` généré dans `.next/standalone/` écoute un
+port TCP et casse le routage o2switch — symptômes typiques : seul `/` répond,
+`/candidats` `/lois` `/sondages` `/methodologie` en 404).
+
+Hors Passenger (`npm start` local), `server.js` délègue au bundle standalone s’il
+existe.
+
+**Document root du domaine** : laisser le `.htaccess` Passenger généré par cPanel
+(proxy de *toutes* les URLs vers Node). Ne pas servir uniquement `public/` via
+Apache sans Passenger — les routes App Router ne sont pas des fichiers statiques.
 
 ---
 

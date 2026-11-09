@@ -4,15 +4,20 @@
  * Application startup file : server.js (à la racine du projet = Application root)
  *
  * Comportement :
- * 1. Si `.next/standalone/server.js` existe (après `next build` + copie static/public),
- *    démarre le serveur standalone généré par Next (léger, idéal prod).
- * 2. Sinon, démarre un serveur HTTP classique via le package `next`
- *    (nécessite node_modules complets + `.next` buildé).
+ * 1. Sous Phusion Passenger : toujours le handler Next classique +
+ *    `server.listen("passenger")`. Ne jamais `require()` le
+ *    `.next/standalone/server.js` généré (il fait `listen(PORT)` TCP),
+ *    sinon seules certaines routes (souvent `/`) répondent et le reste
+ *    tombe en 404 Apache / « page manquante ».
+ * 2. Hors Passenger (`npm start` local) : si le bundle standalone existe
+ *    (après `next build` + copie static/public), délègue à
+ *    `.next/standalone/server.js`.
+ * 3. Sinon : handler Next classique sur PORT.
  *
  * Passenger injecte `PORT` — ne jamais hardcoder un port, ni lancer
  * manuellement `node server.js` en parallèle de Passenger.
  *
- * @see docs/DEPLOY_O2SWITCH.md
+ * @see DEPLOY_O2SWITCH.md
  */
 
 "use strict";
@@ -43,11 +48,11 @@ function bootStandalone() {
   const standaloneDir = path.dirname(standaloneServer);
   // Le server.js généré par Next attend d’être exécuté depuis son dossier
   // (chemins relatifs vers `.next` / `node_modules` du bundle standalone).
+  // Uniquement hors Passenger — voir commentaire en tête de fichier.
   process.chdir(standaloneDir);
-  // PORT déjà fourni par Passenger / l’environnement cPanel.
   require(standaloneServer);
   console.info(
-    `[veote] Passenger → Next standalone (${standaloneDir}) PORT=${process.env.PORT ?? port}`,
+    `[veote] Next standalone (${standaloneDir}) PORT=${process.env.PORT ?? port}`,
   );
 }
 
@@ -64,6 +69,7 @@ function bootClassic() {
   const handle = app.getRequestHandler();
 
   return app.prepare().then(() => {
+    // Sous Passenger : socket nommé "passenger" (pas un port TCP).
     const listenTarget = isPassenger ? "passenger" : port;
 
     http
@@ -71,26 +77,41 @@ function bootClassic() {
         const parsedUrl = parse(req.url || "/", true);
         handle(req, res, parsedUrl).catch((err) => {
           console.error("[veote] request error", req.url, err);
-          res.statusCode = 500;
-          res.end("internal server error");
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.end("internal server error");
+          }
         });
       })
       .listen(listenTarget, () => {
         console.info(
-          `[veote] Passenger → Next classic (${dev ? "dev" : "prod"}) listen=${listenTarget}`,
+          `[veote] Next classic (${dev ? "dev" : "prod"}) listen=${listenTarget} dir=${rootDir}`,
         );
       });
   });
 }
 
 async function main() {
+  if (isPassenger) {
+    // Chemin production o2switch : handler Next + listen("passenger").
+    // Le bundle standalone reste utile pour npm start / Docker, pas ici.
+    if (!fs.existsSync(path.join(rootDir, ".next", "BUILD_ID"))) {
+      console.error(
+        "[veote] `.next/BUILD_ID` introuvable — lancez `npm run build` avant le restart Passenger.",
+      );
+      process.exit(1);
+    }
+    await bootClassic();
+    return;
+  }
+
   if (fs.existsSync(standaloneServer)) {
     bootStandalone();
     return;
   }
 
   console.warn(
-    "[veote] `.next/standalone/server.js` introuvable — fallback serveur next classique. Lancez `npm run build` (output: standalone) pour le chemin recommandé.",
+    "[veote] `.next/standalone/server.js` introuvable — fallback serveur next classique. Lancez `npm run build` (output: standalone) pour le chemin recommandé hors Passenger.",
   );
   await bootClassic();
 }
