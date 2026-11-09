@@ -2,13 +2,10 @@ import type { NextConfig } from "next";
 
 /**
  * Veote — Next.js config (racine projet)
- * - output: "standalone" pour déploiement o2switch Passenger
+ * - Build classique (pas de output standalone) — Passenger via server.js + `.next`
  * - En-têtes de sécurité (CSP, HSTS, X-Frame-Options, …)
  * - experimental.cpus: 1 recommandé si `next build` tourne sur l’hébergement mutualisé
  * - Pas de cookies de tracking / analytics tiers
- *
- * Copier vers : next.config.ts (racine)
- * Miroir fondation : docs/ui-foundation/next.config.ts
  */
 
 const securityHeaders = [
@@ -58,7 +55,6 @@ const securityHeaders = [
 const buildTime = new Date().toISOString();
 
 const nextConfig: NextConfig = {
-  output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
   // Horodatage de compilation injecté dans `lib/version.ts` (badge footer/header).

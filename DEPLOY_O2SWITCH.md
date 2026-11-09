@@ -41,9 +41,9 @@ Caractères spéciaux du mot de passe : URL-encoder (`@` → `%40`, etc.).
 2. Transférer le projet (git clone, rsync, ou ZIP) **hors** document root.
 3. Vérifier la présence à la racine de :
    - `server.js` (entrée Passenger — depuis [`assembly/server.js`](./assembly/server.js))
-   - `package.json`, `next.config.ts` (`output: "standalone"`)
+   - `package.json`, `next.config.ts` (build classique, pas de `output: "standalone"`)
    - `prisma/schema.prisma`, `prisma/seed*.ts`
-   - `scripts/sync-an.ts`, `scripts/copy-standalone-assets.mjs`
+   - `scripts/sync-an.ts`
    - `app/`, `components/`, `lib/`, `public/`
 
 Copie-ready assemblage : [`docs/assembly/`](./assembly/).
@@ -103,11 +103,11 @@ npm run db:push
 # Seed (données réelles sourcées A/B/C + sondage de test labellisé)
 npm run db:seed
 
-# Build production (standalone + copie public/static)
+# Build production (classique — `.next/` complet, pas de standalone)
 npm run build
 ```
 
-Si `next build` est tué (OOM) : builder en local, uploader `.next/` (dont `standalone/`) + `node_modules` de prod, puis `npx prisma generate` sur le serveur.
+Si `next build` est tué (OOM) : builder en local, uploader `.next/` (hors `cache/`) + `node_modules` de prod, puis `npx prisma generate` sur le serveur.
 
 ---
 
@@ -119,13 +119,9 @@ Si `next build` est tué (OOM) : builder en local, uploader `.next/` (dont `stan
 
 Passenger gère le process : **ne pas** lancer `node server.js` manuellement en parallèle.
 
-Sous **Passenger**, `server.js` utilise toujours le handler Next classique avec
-`listen("passenger")` (le `server.js` généré dans `.next/standalone/` écoute un
-port TCP et casse le routage o2switch — symptômes typiques : seul `/` répond,
-`/candidats` `/lois` `/sondages` `/methodologie` en 404).
-
-Hors Passenger (`npm start` local), `server.js` délègue au bundle standalone s’il
-existe.
+Sous **Passenger** (`PhusionPassenger` ou `PASSENGER_APP_ENV`), `server.js`
+utilise le handler Next classique avec `listen("passenger")`. Hors Passenger
+(`npm start` local), il écoute `PORT` (défaut 3000). Pas de bundle standalone.
 
 **Document root du domaine** : laisser le `.htaccess` Passenger généré par cPanel
 (proxy de *toutes* les URLs vers Node), ou aligner sur le modèle [`.htaccess`](./.htaccess)
@@ -220,7 +216,7 @@ Exclusions permanentes : `.env`, `node_modules`, `.git` (le `.env` / variables c
 
 | Script | Action |
 |--------|--------|
-| `npm run build` | `next build` + copie assets standalone |
+| `npm run build` | `next build` (classique, pas de standalone) |
 | `npm start` | `node server.js` (local ; en prod = Passenger) |
 | `npm run db:push` | Pousse le schéma Prisma |
 | `npm run db:migrate` | `prisma migrate deploy` |

@@ -5,7 +5,7 @@
 
 import type { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { prisma, safeQuery } from "@/lib/prisma";
 
 import type { LawSearchFilters } from "./search-params";
 
@@ -91,67 +91,92 @@ export function buildLawWhere(
 }
 
 export async function searchLaws(filters: LawSearchFilters) {
-  return prisma.law.findMany({
-    where: buildLawWhere(filters),
-    include: lawListInclude,
-    orderBy: [{ adoptedOn: "desc" }, { introducedOn: "desc" }, { title: "asc" }],
-  });
+  return safeQuery(
+    "searchLaws",
+    () =>
+      prisma.law.findMany({
+        where: buildLawWhere(filters),
+        include: lawListInclude,
+        orderBy: [
+          { adoptedOn: "desc" },
+          { introducedOn: "desc" },
+          { title: "asc" },
+        ],
+      }),
+    [],
+  );
 }
 
 export async function listThemes() {
-  const rows = await prisma.law.findMany({
-    where: {
-      chamber: "ASSEMBLEE_NATIONALE",
-      themeSlug: { not: null },
+  return safeQuery(
+    "listThemes",
+    async () => {
+      const rows = await prisma.law.findMany({
+        where: {
+          chamber: "ASSEMBLEE_NATIONALE",
+          themeSlug: { not: null },
+        },
+        distinct: ["themeSlug"],
+        select: { themeSlug: true, themeLabel: true },
+        orderBy: { themeLabel: "asc" },
+      });
+      return rows.filter(
+        (r): r is { themeSlug: string; themeLabel: string | null } =>
+          Boolean(r.themeSlug),
+      );
     },
-    distinct: ["themeSlug"],
-    select: { themeSlug: true, themeLabel: true },
-    orderBy: { themeLabel: "asc" },
-  });
-  return rows.filter(
-    (r): r is { themeSlug: string; themeLabel: string | null } =>
-      Boolean(r.themeSlug),
+    [],
   );
 }
 
 export async function listParliamentaryGroupsForFilter(legislature?: number) {
-  return prisma.parliamentaryGroup.findMany({
-    where: {
-      chamber: "ASSEMBLEE_NATIONALE",
-      ...(legislature != null ? { legislature } : {}),
-    },
-    orderBy: [{ legislature: "desc" }, { acronym: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      slug: true,
-      name: true,
-      acronym: true,
-      legislature: true,
-    },
-  });
+  return safeQuery(
+    "listParliamentaryGroupsForFilter",
+    () =>
+      prisma.parliamentaryGroup.findMany({
+        where: {
+          chamber: "ASSEMBLEE_NATIONALE",
+          ...(legislature != null ? { legislature } : {}),
+        },
+        orderBy: [{ legislature: "desc" }, { acronym: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          acronym: true,
+          legislature: true,
+        },
+      }),
+    [],
+  );
 }
 
 export async function getLawBySlug(slug: string) {
-  return prisma.law.findUnique({
-    where: { slug },
-    include: {
-      sources: { include: { source: true } },
-      authorGroup: true,
-      arguments: {
-        include: { sources: { include: { source: true } } },
-        orderBy: [{ camp: "asc" }, { sortOrder: "asc" }],
-      },
-      votes: {
+  return safeQuery(
+    "getLawBySlug",
+    () =>
+      prisma.law.findUnique({
+        where: { slug },
         include: {
           sources: { include: { source: true } },
-          positions: {
-            where: { isGroupAggregate: true },
-            include: { group: true },
-            orderBy: [{ groupId: "asc" }, { position: "asc" }],
+          authorGroup: true,
+          arguments: {
+            include: { sources: { include: { source: true } } },
+            orderBy: [{ camp: "asc" }, { sortOrder: "asc" }],
+          },
+          votes: {
+            include: {
+              sources: { include: { source: true } },
+              positions: {
+                where: { isGroupAggregate: true },
+                include: { group: true },
+                orderBy: [{ groupId: "asc" }, { position: "asc" }],
+              },
+            },
+            orderBy: { votedOn: "desc" },
           },
         },
-        orderBy: { votedOn: "desc" },
-      },
-    },
-  });
+      }),
+    null,
+  );
 }
