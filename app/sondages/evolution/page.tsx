@@ -30,7 +30,7 @@ type PageProps = {
 
 /**
  * Évolution interactive — Recharts + filtre institut.
- * Copier vers : app/c/evolution/page.tsx
+ * Copier vers : app/sondages/evolution/page.tsx
  */
 export default async function EvolutionPage({ searchParams }: PageProps) {
   const raw = await searchParams;

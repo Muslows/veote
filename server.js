@@ -4,11 +4,11 @@
  * Application startup file : server.js (à la racine du projet = Application root)
  *
  * Comportement :
- * 1. Sous Phusion Passenger : toujours le handler Next classique +
- *    `server.listen("passenger")`. Ne jamais `require()` le
- *    `.next/standalone/server.js` généré (il fait `listen(PORT)` TCP),
- *    sinon seules certaines routes (souvent `/`) répondent et le reste
- *    tombe en 404 Apache / « page manquante ».
+ * 1. Sous Phusion Passenger : toujours Next classique
+ *    `next({ dev: false })` + `getRequestHandler()` + `listen("passenger")`.
+ *    Ne jamais `require()` le `.next/standalone/server.js` généré (il fait
+ *    `listen(PORT)` TCP), sinon seules certaines routes (souvent `/`)
+ *    répondent et le reste tombe en 404 Apache / « page manquante ».
  * 2. Hors Passenger (`npm start` local) : si le bundle standalone existe
  *    (après `next build` + copie static/public), délègue à
  *    `.next/standalone/server.js`.
@@ -18,6 +18,7 @@
  * manuellement `node server.js` en parallèle de Passenger.
  *
  * @see DEPLOY_O2SWITCH.md
+ * @see .htaccess (document root domaine — ne pas 404 avant Passenger)
  */
 
 "use strict";
@@ -56,10 +57,11 @@ function bootStandalone() {
   );
 }
 
-function bootClassic() {
+function bootClassic({ forceProd = false } = {}) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const next = require("next");
-  const dev = process.env.NODE_ENV !== "production";
+  // Sous Passenger : toujours production (dev: false) — demandé pour o2switch.
+  const dev = forceProd ? false : process.env.NODE_ENV !== "production";
   const app = next({
     dev,
     dir: rootDir,
@@ -93,7 +95,7 @@ function bootClassic() {
 
 async function main() {
   if (isPassenger) {
-    // Chemin production o2switch : handler Next + listen("passenger").
+    // Chemin production o2switch : next({ dev: false }) + listen("passenger").
     // Le bundle standalone reste utile pour npm start / Docker, pas ici.
     if (!fs.existsSync(path.join(rootDir, ".next", "BUILD_ID"))) {
       console.error(
@@ -101,7 +103,7 @@ async function main() {
       );
       process.exit(1);
     }
-    await bootClassic();
+    await bootClassic({ forceProd: true });
     return;
   }
 

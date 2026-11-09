@@ -55,16 +55,23 @@ const securityHeaders = [
   },
 ];
 
+const buildTime = new Date().toISOString();
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
+  // Horodatage de compilation injecté dans `lib/version.ts` (badge footer/header).
+  env: {
+    NEXT_PUBLIC_BUILD_TIME: buildTime,
+  },
   // Limite les workers de build sur o2switch (mémoire mutualisée).
   // Sans effet notable en CI / machine locale puissante ; sûr partout.
   experimental: {
     cpus: 1,
   },
   // Anciennes routes modules A/B/C → chemins français publics.
+  // Les hrefs UI doivent déjà pointer vers /candidats|/lois|/sondages — pas /a|/b|/c.
   async redirects() {
     return [
       { source: "/a", destination: "/candidats", permanent: true },

@@ -27,7 +27,7 @@ type PageProps = {
 
 /**
  * Liste observatoire — chaque sondage affiche les mentions Commission.
- * Copier vers : app/c/page.tsx
+ * Copier vers : app/sondages/page.tsx
  */
 export default async function ModuleCIndexPage({ searchParams }: PageProps) {
   const raw = await searchParams;

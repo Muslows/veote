@@ -14,6 +14,8 @@ Déploiement cible : **o2switch** (Phusion Passenger, `output: "standalone"`).
 Méthodologie & mentions : [`/methodologie`](./app/methodologie/page.tsx).  
 Guide déploiement : [`DEPLOY_O2SWITCH.md`](./DEPLOY_O2SWITCH.md).
 
+**Versioning :** toute modification de code doit bumper `APP_VERSION` dans [`lib/version.ts`](./lib/version.ts) avant commit (badge footer/header).
+
 ## CI / déploiement
 
 Push sur `main` → [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) build sur GitHub Actions puis déploie sur o2switch (rsync + SSH).

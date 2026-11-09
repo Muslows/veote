@@ -128,8 +128,10 @@ Hors Passenger (`npm start` local), `server.js` délègue au bundle standalone s
 existe.
 
 **Document root du domaine** : laisser le `.htaccess` Passenger généré par cPanel
-(proxy de *toutes* les URLs vers Node). Ne pas servir uniquement `public/` via
-Apache sans Passenger — les routes App Router ne sont pas des fichiers statiques.
+(proxy de *toutes* les URLs vers Node), ou aligner sur le modèle [`.htaccess`](./.htaccess)
+du dépôt (chemins `USER` / `nodevenv` à adapter). Ne **pas** ajouter de
+`ErrorDocument` / rewrite qui 404 avant Passenger, et ne pas servir uniquement
+`public/` via Apache — les routes App Router ne sont pas des fichiers statiques.
 
 ---
 

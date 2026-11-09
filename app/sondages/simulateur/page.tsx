@@ -29,7 +29,7 @@ type PageProps = {
 
 /**
  * Simulateur 2ᵉ tour — URL partageable (?pollId&c1&c2&matrix&r).
- * Copier vers : app/c/simulateur/page.tsx
+ * Copier vers : app/sondages/simulateur/page.tsx
  */
 export default async function SimulateurPage({ searchParams }: PageProps) {
   const raw = await searchParams;

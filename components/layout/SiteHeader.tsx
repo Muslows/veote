@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { formatBuildLabel } from "@/lib/version";
+
 const NAV = [
   { href: "/candidats", label: "Candidats", module: "A" },
   { href: "/lois", label: "Lois", module: "B" },
@@ -15,22 +17,31 @@ const NAV = [
  */
 export function SiteHeader() {
   const pathname = usePathname() ?? "";
+  const buildLabel = formatBuildLabel();
 
   return (
     <header className="border-b border-veote-border/80 bg-veote-bg/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-shell items-center justify-between gap-6 px-4 py-4 sm:px-6">
-        <Link
-          href="/"
-          className="group flex items-baseline gap-2 no-underline"
-          aria-label="Veote — accueil"
-        >
-          <span className="font-display text-2xl font-semibold tracking-tight text-veote-text transition-colors group-hover:text-veote-focus">
-            Veote
-          </span>
-          <span className="hidden text-xs font-medium uppercase tracking-[0.14em] text-veote-muted sm:inline">
-            Présidentielle 2027
-          </span>
-        </Link>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <Link
+            href="/"
+            className="group flex items-baseline gap-2 no-underline"
+            aria-label="Veote — accueil"
+          >
+            <span className="font-display text-2xl font-semibold tracking-tight text-veote-text transition-colors group-hover:text-veote-focus">
+              Veote
+            </span>
+            <span className="hidden text-xs font-medium uppercase tracking-[0.14em] text-veote-muted sm:inline">
+              Présidentielle 2027
+            </span>
+          </Link>
+          <p
+            className="truncate font-mono text-[0.65rem] tracking-wide text-veote-muted/70"
+            title={buildLabel}
+          >
+            {buildLabel}
+          </p>
+        </div>
 
         <nav aria-label="Modules principaux">
           <ul className="flex items-center gap-1 sm:gap-2">

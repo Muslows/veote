@@ -30,7 +30,7 @@ export async function generateMetadata({
 
 /**
  * Page parti — généalogie PoliticalPartyHistory (+ participants N-aires).
- * Copier vers : app/a/partis/[slug]/page.tsx
+ * Copier vers : app/candidats/partis/[slug]/page.tsx
  */
 export default async function PartyPage({ params }: PageProps) {
   const { slug } = await params;

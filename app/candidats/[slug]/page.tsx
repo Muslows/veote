@@ -33,7 +33,7 @@ export async function generateMetadata({
 
 /**
  * Fiche candidat — parcours, mandats, affiliations, HATVP (détails optionnels).
- * Copier vers : app/a/[slug]/page.tsx
+ * Copier vers : app/candidats/[slug]/page.tsx
  */
 export default async function CandidatePage({ params }: PageProps) {
   const { slug } = await params;

@@ -1,10 +1,14 @@
 import Link from "next/link";
 
+import { formatBuildLabel } from "@/lib/version";
+
 /**
  * Pied de page institutionnel — neutralité, méthodologie, pas de trackers.
  * Copier vers : components/layout/SiteFooter.tsx
  */
 export function SiteFooter() {
+  const buildLabel = formatBuildLabel();
+
   return (
     <footer className="mt-auto border-t border-veote-border/80 bg-veote-bg">
       <div className="mx-auto flex max-w-shell flex-col gap-4 px-4 py-8 text-sm text-veote-muted sm:flex-row sm:items-start sm:justify-between sm:px-6">
@@ -13,6 +17,9 @@ export function SiteFooter() {
           <p className="max-w-md leading-relaxed">
             Plateforme civic-tech neutre. Données publiques sourcées. Aucun
             cookie de suivi, aucune collecte de données personnelles.
+          </p>
+          <p className="font-mono text-[0.7rem] tracking-wide text-veote-muted/80">
+            {buildLabel}
           </p>
         </div>
 
